@@ -1,3 +1,3 @@
 # Opengl FPS game project
-Well, what can I say,
-its an opengl first person shooter project
+A First person shooter project made with opengl and glfw 3
+<br>
