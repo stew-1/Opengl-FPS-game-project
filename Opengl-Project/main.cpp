@@ -2,11 +2,14 @@
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <vector>
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-//GLFWvidmode videomode;
+#include <glm/gtx/euler_angles.hpp>
+#include "view/shader.h"
+#include "model/scene.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 int winWidth;
 int winHeight;
@@ -41,10 +44,10 @@ GLFWwindow* initialize() {
 	return window;
 }
 
-void processInput(GLFWwindow* window, glm::vec3& playerPosition, glm::vec3& playerEulers) {
-	
+void processInput(GLFWwindow* window, Scene* scene) {
+
 	int wasdState{0};
-	float walk_direction{playerEulers.z};
+	float walk_direction{scene->player->eulers.z};
 	bool walking{false};
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 	{
@@ -67,7 +70,7 @@ void processInput(GLFWwindow* window, glm::vec3& playerPosition, glm::vec3& play
 	}
 
 	//switch on wasd state
-	switch (wasdState) 
+	switch (wasdState)
 	{
 	case 1:
 	case 11:
@@ -114,11 +117,11 @@ void processInput(GLFWwindow* window, glm::vec3& playerPosition, glm::vec3& play
 	}
 		if(walking)
 		{
-			playerPosition += 0.01f * glm::vec3{
+			scene->movePlayer(0.01f * glm::vec3{
 				glm::cos(glm::radians(walk_direction)),
 				glm::sin(glm::radians(walk_direction)),
 				0.0f
-			};
+			});
 		}
 
 		//mouse
@@ -127,90 +130,18 @@ void processInput(GLFWwindow* window, glm::vec3& playerPosition, glm::vec3& play
 		glfwSetCursorPos(window, (float)winWidth/2, (float)winHeight/2);
 
 		float delta_x{static_cast<float>(mouse_x - (float)winWidth/2)};
-		playerEulers.z -= delta_x;
-
 		float delta_y{static_cast<float>(mouse_y - (float)winHeight/2)};
-		playerEulers.y = std::max(std::min(playerEulers.y + delta_y, 179.0f), 1.0f);
-}
 
-unsigned int makeProgram() {
-	//make the shaders, we'll hardcode everything, for now
-
-	//     \0 is the nul character, used to indicate the end of a string.
-	const char* vertexShaderSource = "#version 450 core\n"
-		"layout (location = 0) in vec3 vertexPosition;\n"
-		"layout (location = 1) in vec3 vertexTexCoords;\n"
-		"layout (location = 0) out vec2 fragmentTexCoords;\n"
-		"uniform mat4 model;\n"
-		"uniform mat4 view;\n"
-		"uniform mat4 projection;\n"
-		"void main()\n"
-		"{\n"
-		"    gl_Position = projection * view * model * vec4(vertexPosition, 1.0);\n"
-		"    fragmentTexCoords = vec2(vertexTexCoords.x, 1.0 - vertexTexCoords.y);\n"
-		"}\0";
-
-	const char* fragmentShaderSource = "#version 450 core\n"
-		"layout (location = 0) in vec2 fragmentTexCoords;\n"
-		"uniform sampler2D basicTexture;\n"
-		"out vec4 finalColor;\n"
-		"void main()\n"
-		"{\n"
-		"    finalColor = texture(basicTexture, fragmentTexCoords);\n"
-		"}\0";
-
-	//compile the shaders
-	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	//last argument is length NULL indicates that the string is NUL-terminated
-	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-	glCompileShader(vertexShader);
-
-	//check error status
-	int success;
-	char errorLog[1024];
-	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		glGetShaderInfoLog(vertexShader, 1024, NULL, errorLog);
-		std::cout << "Vertex Shader compilation error:\n" << errorLog << '\n';
-	}
-
-	unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	//last argument is length NULL indicates that the string is NUL-terminated
-	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-	glCompileShader(fragmentShader);
-
-	//check error status
-	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		glGetShaderInfoLog(fragmentShader, 1024, NULL, errorLog);
-		std::cout << "fragment Shader compilation error:\n" << errorLog << '\n';
-	}
-
-	//link shaders together to form a program, this will run on our GPU to draw stuff
-	unsigned int shader = glCreateProgram();
-	glAttachShader(shader, vertexShader);
-	glAttachShader(shader, fragmentShader);
-	glLinkProgram(shader);
-
-	//check error status
-	glGetProgramiv(shader, GL_LINK_STATUS, &success);
-	if (!success) {
-		glGetProgramInfoLog(shader, 1024, NULL, errorLog);
-		std::cout << "Shader linking error:\n" << errorLog << '\n';
-	}
-
-	//memory was allocated to load source code and compile the shaders,
-	//but they aren't needed anymore
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
-
-	return shader;
+		scene->spinPlayer(
+					{
+						0.0f, delta_y, -delta_x
+					}
+		);
 }
 
 int main() {
 
-	glm::vec3 playerPosition = {0.0f, 0.0f, 0.0f};
-	glm::vec3 playerEulers = {0.0f, 90.0f, 0.0f};
+	Scene* scene = new Scene();
 
 	GLFWwindow* window = initialize();
 	if (!window) {
@@ -220,7 +151,7 @@ int main() {
 	float aspectRatio = (float)winWidth / (float)winHeight;
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
-	unsigned int shader = makeProgram();
+	unsigned int shader = util::load_shader("shaders/vertex.txt", "shaders/fragment.txt");
 	//nine out of ten unexpected errors in OpenGL are caused by not using the right program.
 	glUseProgram(shader);
 
@@ -345,32 +276,28 @@ int main() {
 	//game loop
 	while (!glfwWindowShouldClose(window)) {
 
-		processInput(window, playerPosition, playerEulers);
+		processInput(window, scene);
 
-		//update view
-		glm::vec3 forwards{
-			glm::sin(glm::radians(playerEulers.y)) * glm::cos(glm::radians(playerEulers.z)),
-			glm::sin(glm::radians(playerEulers.y)) * glm::sin(glm::radians(playerEulers.z)),
-			glm::cos(glm::radians(playerEulers.y))
-		};
-		glm::vec3 globalUp{0.0f, 0.0f, 1.0f};
-		glm::vec3 right{glm::cross(forwards, globalUp)};
-		glm::vec3 up{glm::cross(right, forwards)};	
-		glm::mat4 viewTransform{glm::lookAt(playerPosition, playerPosition + forwards, up)};
+		//update
+		scene->update(1.0f);
+
+		//prepare shaders
+		glm::mat4 viewTransform{glm::lookAt(scene->player->position, scene->player->position + scene->player->forwards, scene->player->up)};
 		glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, false, glm::value_ptr(viewTransform));
 
 		glfwPollEvents();
 
 		//update transform
-		float angle = glm::radians(static_cast<float>(10*glfwGetTime()));
+		//float angle = glm::radians(static_cast<float>(10*glfwGetTime()));
 		glm::mat4 modelTransform = glm::mat4(1.0f);
-		modelTransform = glm::translate(modelTransform, {3.0f, 0.0f, 0.0f});
-		//modelTransform = glm::rotate(modelTransform, 3.0f * angle,{1.0f, 0.0f, 0.0f});
-		//modelTransform = glm::rotate(modelTransform, 2.0f * angle,{0.0f, 1.0f, 0.0f});
+		modelTransform = glm::translate(modelTransform, scene->cube->position);
+
+		modelTransform = modelTransform * glm::eulerAngleXYZ(scene->cube->eulers.x, scene->cube->eulers.y, scene->cube->eulers.z);
+
 		glUniformMatrix4fv(glGetUniformLocation(shader, "model"), 1, false, glm::value_ptr(modelTransform));
 
 		//draw
-		
+
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glUseProgram(shader);
 
