@@ -11,15 +11,11 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include "view/shader.h"
-#include "view/rectangle_model.h"
-#include "view/image.h"
+#include "view/engine.h"
 #include "model/scene.h"
 
 int winWidth;
 int winHeight;
-
-float nearDisplay = 0.1f;
-float farDisplay = 100.0f;
 
 GLFWwindow* initialize() {
 	glfwInit();
@@ -152,45 +148,10 @@ int main() {
 		glfwTerminate();
 		return -1;
 	}
-	float aspectRatio = (float)winWidth / (float)winHeight;
+	//float aspectRatio = (float)winWidth / (float)winHeight;
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-
-	unsigned int shader = util::load_shader("shaders/vertex.txt", "shaders/fragment.txt");
-	//nine out of ten unexpected errors in OpenGL are caused by not using the right program.
-	glUseProgram(shader);
 	
-	RectangleModelCreateInfo cubeInfo;
-	cubeInfo.size = {2.0f, 1.0f, 1.0f};
-	
-	RectangleModel* cubeModel = new RectangleModel(&cubeInfo);
-
-	//texture
-	glUniform1i(glGetUniformLocation(shader, "basicTexture"), 0);
-
-	//load image
-	int texWidth, texHeight;
-	
-	image material = util::load_from_file("textures/wood.jpeg");
-	
-	texWidth = material.width;
-	texHeight = material.height;
-	
-	unsigned char* data = material.pixels;
-	unsigned int texture;
-	glCreateTextures(GL_TEXTURE_2D, 1, &texture);
-	glTextureStorage2D(texture, 1, GL_RGBA8, texWidth, texHeight);
-	glTextureSubImage2D(texture, 0, 0, 0, texWidth, texHeight, GL_RGBA, GL_UNSIGNED_BYTE, data);
-	glTextureParameteri(texture, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTextureParameteri(texture, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	util::free_image_memory(material);
-
-	//set up framebuffer
-	glClearColor(0.5f, 0.1f, 0.3f, 1.0f);
-	glEnable(GL_DEPTH_TEST);
-	glm::mat4 projectionTransform = glm::perspective(45.0f, aspectRatio, nearDisplay, farDisplay);
-	glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, false, glm::value_ptr(projectionTransform));
+	Engine* renderer = new Engine(winWidth, winHeight);
 
 	//game loop
 	while (!glfwWindowShouldClose(window)) {
@@ -200,39 +161,19 @@ int main() {
 		//update
 		scene->update(1.0f);
 
-		//prepare shaders
-		glm::mat4 viewTransform{glm::lookAt(scene->player->position, scene->player->position + scene->player->forwards, scene->player->up)};
-		glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, false, glm::value_ptr(viewTransform));
-
 		glfwPollEvents();
 
-		//update transform
-		//float angle = glm::radians(static_cast<float>(10*glfwGetTime()));
-		glm::mat4 modelTransform = glm::mat4(1.0f);
-		modelTransform = glm::translate(modelTransform, scene->cube->position);
+		renderer->render(scene);
+		
 
-		modelTransform = modelTransform * glm::eulerAngleXYZ(scene->cube->eulers.x, scene->cube->eulers.y, scene->cube->eulers.z);
-
-		glUniformMatrix4fv(glGetUniformLocation(shader, "model"), 1, false, glm::value_ptr(modelTransform));
-
-		//draw
-
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glUseProgram(shader);
-
-		glBindTextureUnit(0, texture);
-
-		glBindVertexArray(cubeModel->VAO);
-		glDrawArrays(GL_TRIANGLES, 0, cubeModel->vertexCount);
 
 		glfwSwapBuffers(window);
 
 	}
 
 	//free memory
-	delete cubeModel;
-	glDeleteTextures(1, &texture);
-	glDeleteProgram(shader);
+	delete scene;
+	delete renderer;
 	glfwTerminate();
 
 	return 0;
