@@ -1,15 +1,19 @@
+//END OF SERIES OPTIMIZATION:
+//batching
+//enable backface culling
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <vector>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
-#include "view/shader.h"
-#include "model/scene.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include "view/shader.h"
+#include "view/rectangle_model.h"
+#include "view/image.h"
+#include "model/scene.h"
 
 int winWidth;
 int winHeight;
@@ -154,109 +158,24 @@ int main() {
 	unsigned int shader = util::load_shader("shaders/vertex.txt", "shaders/fragment.txt");
 	//nine out of ten unexpected errors in OpenGL are caused by not using the right program.
 	glUseProgram(shader);
-
-
-	//triangle data, using vector type to store a list of floats
-	// x,y,z,s,t
-	std::vector<float> vertices = {
-			-0.5f, -0.5f, -0.5f, 0.0f, 0.0f, // bottom
-			 0.5f, -0.5f, -0.5f, 1.0f, 0.0f,
-			 0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-
-			 0.5f,  0.5f, -0.5f, 1.0f, 1,
-			-0.5f,  0.5f, -0.5f, 0.0f, 1,
-			-0.5f, -0.5f, -0.5f, 0.0f, 0,
-
-			-0.5f, -0.5f,  0.5f, 0.0f, 0.0f, //top
-			 0.5f, -0.5f,  0.5f, 1.0f, 0.0f,
-			 0.5f,  0.5f,  0.5f, 1.0f, 1.0f,
-
-			 0.5f,  0.5f,  0.5f, 1.0f, 1.0f,
-			-0.5f,  0.5f,  0.5f, 0.0f, 1.0f,
-			-0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
-
-			-0.5f,  0.5f,  0.5f, 1.0f, 0.0f, //left
-			-0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-			-0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-
-			-0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-			-0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
-			-0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-
-			 0.5f,  0.5f,  0.5f, 1.0f, 0.0f, //right
-			 0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-			 0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-
-			 0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-			 0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
-			 0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-
-			-0.5f, -0.5f, -0.5f, 0.0f, 1.0f, //back
-			 0.5f, -0.5f, -0.5f, 1.0f, 1.0f,
-			 0.5f, -0.5f,  0.5f, 1.0f, 0.0f,
-
-			 0.5f, -0.5f,  0.5f, 1.0f, 0.0f,
-			-0.5f, -0.5f,  0.5f, 0.0f, 0.0f,
-			-0.5f, -0.5f, -0.5f, 0.0f, 1.0f,
-
-			-0.5f,  0.5f, -0.5f, 0.0f, 1.0f, //front
-			 0.5f,  0.5f, -0.5f, 1.0f, 1.0f,
-			 0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-
-			 0.5f,  0.5f,  0.5f, 1.0f, 0.0f,
-			-0.5f,  0.5f,  0.5f, 0.0f, 0.0f,
-			-0.5f,  0.5f, -0.5f, 0.0f, 1.0f
-	};
-
-	int vertexCount = vertices.size()/5;
-
-	//this data exists on the cpu side, we need to get it to the gpu side.
-	//This is done with a vertex buffer object (vbo)
-	unsigned int VBO;
-	glCreateBuffers(1, &VBO);
-
-	//a vertex array object stores data and attribute information
-	unsigned int VAO;
-	glCreateVertexArrays(1, &VAO);
-	//bind the vertex buffer object to the VAO
-	//(VAO, binding index, VBO, offset, stride)
-	glVertexArrayVertexBuffer(VAO, 0, VBO, 0, 5 * sizeof(float));
-
-	//send data to our new VBO. memory is allocated at this point (VBO will have to be deleted later)
-	//(VBO, size in bytes, pointer to data start, mode)
-	glNamedBufferStorage(VBO, vertices.size() * sizeof(float), vertices.data(), GL_DYNAMIC_STORAGE_BIT);
-	/*
-		DYNAMIC_STORAGE: data may be updated after creation through glBufferSubData()
-		MAP_READ: data can be read
-		MAP_WRITE: data can be written to
-		MAP_PERSISTENT: data can be worked with by the GPU while mapped (taking CPU instructions like read/write)
-		MAP_COHERENT: read/write instructions are executed immediately
-		CLIENT_STORAGE: store buffer data on client (CPU) side
-	*/
-
-	/*
-		the data has been loaded into the GPU's vram (video ram),
-		however the GPU doesn't know how to use it.
-		Where is the position data, where is the color data?
-		We need to create attribute pointers to describe how to get the attributes out
-		of that list of big, dumb numbers.
-	*/
-	//pos
-	glEnableVertexArrayAttrib(VAO, 0);
-	glVertexArrayAttribFormat(VAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
-	glVertexArrayAttribBinding(VAO, 0, 0);
-
-	//texture coords
-	glEnableVertexArrayAttrib(VAO, 1);
-	glVertexArrayAttribFormat(VAO, 1, 2, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
-	glVertexArrayAttribBinding(VAO, 1, 0);
+	
+	RectangleModelCreateInfo cubeInfo;
+	cubeInfo.size = {2.0f, 1.0f, 1.0f};
+	
+	RectangleModel* cubeModel = new RectangleModel(&cubeInfo);
 
 	//texture
 	glUniform1i(glGetUniformLocation(shader, "basicTexture"), 0);
 
 	//load image
-	int texWidth, texHeight, channelCount;
-	unsigned char* data = stbi_load("textures/wood.jpeg", &texWidth, &texHeight, &channelCount, STBI_rgb_alpha); //change to STBI_rgb
+	int texWidth, texHeight;
+	
+	image material = util::load_from_file("textures/wood.jpeg");
+	
+	texWidth = material.width;
+	texHeight = material.height;
+	
+	unsigned char* data = material.pixels;
 	unsigned int texture;
 	glCreateTextures(GL_TEXTURE_2D, 1, &texture);
 	glTextureStorage2D(texture, 1, GL_RGBA8, texWidth, texHeight);
@@ -265,7 +184,7 @@ int main() {
 	glTextureParameteri(texture, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	stbi_image_free(data);
+	util::free_image_memory(material);
 
 	//set up framebuffer
 	glClearColor(0.5f, 0.1f, 0.3f, 1.0f);
@@ -303,17 +222,16 @@ int main() {
 
 		glBindTextureUnit(0, texture);
 
-		glBindVertexArray(VAO);
-		glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+		glBindVertexArray(cubeModel->VAO);
+		glDrawArrays(GL_TRIANGLES, 0, cubeModel->vertexCount);
 
 		glfwSwapBuffers(window);
 
 	}
 
 	//free memory
+	delete cubeModel;
 	glDeleteTextures(1, &texture);
-	glDeleteBuffers(1, &VBO);
-	glDeleteVertexArrays(1, &VAO);
 	glDeleteProgram(shader);
 	glfwTerminate();
 
