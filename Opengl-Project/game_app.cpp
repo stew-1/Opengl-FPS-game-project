@@ -1,0 +1,177 @@
+#include "control/game_app.h"
+
+GameApp::GameApp(GameAppCreateInfo* createInfo)
+{
+	winWidth = createInfo->width;
+	winHeight = createInfo->height;
+	
+	lastTime = glfwGetTime();
+	numFrames = 0;
+	frameTime = 16.0f;
+	
+	window = makeWindow();
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+	
+	renderer = new Engine(winWidth, winHeight);
+	scene = new Scene();
+}
+
+GLFWwindow* GameApp::makeWindow() {
+	
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	
+	GLFWwindow* window = glfwCreateWindow(winWidth, winHeight, "game bois", glfwGetPrimaryMonitor(), NULL);
+	if (!window) {
+		return NULL;
+	}
+	glfwMakeContextCurrent(window);
+
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+		return NULL;
+	}
+
+	glViewport(0, 0, winWidth, winHeight);
+
+	return window;
+}
+
+returnCode GameApp::processInput() {
+	
+	int wasdState{0};
+	float walk_direction{scene->player->eulers.z};
+	bool walking{false};
+	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	{
+		wasdState += 1;
+	}
+	if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+	{
+		wasdState += 2;
+	}
+	if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	{
+		wasdState += 4;
+	}
+	if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+	{
+		wasdState += 8;
+	}
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+		return returnCode::QUIT;
+	}
+
+	//switch on wasd state
+	switch (wasdState)
+	{
+	case 1:
+	case 11:
+		//forwards
+		walking = true;
+		break;
+	case 3:
+		//left-forwards
+		walking = true;
+		walk_direction += 45;
+		break;
+	case 2:
+	case 7:
+		//left
+		walking = true;
+		walk_direction += 90;
+		break;
+	case 6:
+		//left-backwards
+		walking = true;
+		walk_direction += 135;
+		break;
+	case 4:
+	case 14:
+		//backwards
+		walking = true;
+		walk_direction += 180;
+		break;
+	case 12:
+		//right-backwards
+		walking = true;
+		walk_direction += 225;
+		break;
+	case 8:
+	case 13:
+		//right
+		walking = true;
+		walk_direction += 270;
+		break;
+	case 9:
+		//right-forwards
+		walking = true;
+		walk_direction += 315;
+	}
+		if(walking)
+		{
+			scene->movePlayer(0.1f * frameTime/16.0f * glm::vec3{
+				glm::cos(glm::radians(walk_direction)),
+				glm::sin(glm::radians(walk_direction)),
+				0.0f
+			});
+		}
+
+		//mouse
+		double mouse_x, mouse_y;
+		glfwGetCursorPos(window, &mouse_x, &mouse_y);
+		glfwSetCursorPos(window, (float)winWidth/2, (float)winHeight/2);
+
+		float delta_x{static_cast<float>(mouse_x - (float)winWidth/2)};
+		float delta_y{static_cast<float>(mouse_y - (float)winHeight/2)};
+
+		scene->spinPlayer(
+					frameTime/16.0f * 2 * glm::vec3{
+						0.0f, delta_y, -delta_x
+					}
+		);
+		return returnCode::CONTINUE;
+}
+
+returnCode GameApp::mainLoop(){
+
+	returnCode nextAction{processInput()};
+
+	scene->update(frameTime / 16.0f);
+
+	glfwPollEvents();
+
+	renderer->render(scene);
+		
+	glfwSwapBuffers(window);
+	
+	calculateFrameRate();
+	
+	return nextAction;
+}
+
+GameApp::~GameApp(){
+	//free memory
+	delete scene;
+	delete renderer;
+	glfwTerminate();
+}
+
+void GameApp::calculateFrameRate()
+{
+	currentTime = glfwGetTime();
+	double delta = currentTime - lastTime;
+	
+	if(delta >= 0.01)
+	{
+		int framerate{ std::max(1, int(numFrames/delta)) };
+		std::stringstream title;
+		title << framerate << "fps";
+		glfwSetWindowTitle(window, title.str().c_str());
+		lastTime = currentTime;
+		numFrames = -1;
+		frameTime = float(1000.0 / framerate);
+		
+	}
+	++numFrames;
+}
