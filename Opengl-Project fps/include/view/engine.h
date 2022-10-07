@@ -2,7 +2,8 @@
 
 #include"model/scene.h"
 #include"shader.h"
-#include"rectangle_model.h"
+//#include"rectangle_model.h"
+#include "obj_mesh.h"
 #include"material.h"
 #include <glm/gtx/euler_angles.hpp>
 
@@ -18,5 +19,5 @@ class Engine
 	
 	unsigned int shader;
 	Material* woodMaterial;
-	RectangleModel* cubeModel;
+	ObjMesh* cubeModel;
 };

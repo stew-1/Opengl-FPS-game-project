@@ -62,8 +62,9 @@ void Engine::createMaterials()
 }
 void Engine::createModels()
 {
-	RectangleModelCreateInfo cubeInfo;
-	cubeInfo.size = {2.0f, 1.0f, 1.0f};
-	cubeModel = new RectangleModel(&cubeInfo);
+	MeshCreateInfo cubeInfo;
+	cubeInfo.filename = "models/cube.obj";
+	cubeInfo.preTransform = glm::mat4(1.0);
+	cubeModel = new ObjMesh(&cubeInfo);
 }
 void Engine::render(Scene* scene);
