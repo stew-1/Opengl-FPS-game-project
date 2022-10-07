@@ -14,7 +14,8 @@ Engine::Engine(int width, int height)
 	glUniform1i(glGetUniformLocation(shader, "basicTexture"), 0);
 	
 	//set up framebuffer
-	glClearColor(0.5f, 0.1f, 0.3f, 1.0f);
+	//glClearColor(0.5f, 0.1f, 0.3f, 1.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glEnable(GL_DEPTH_TEST);
 	glm::mat4 projectionTransform = glm::perspective(45.0f, aspectRatio, nearDisplay, farDisplay);
 	glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, false, glm::value_ptr(projectionTransform));
